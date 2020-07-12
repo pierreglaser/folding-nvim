@@ -28,11 +28,13 @@ end
 function M.setup_plugin()
   local clients = vim.lsp.buf_get_clients()
 
-  for id, client in pairs(clients) do
-    if M.done_clients[id + 1] == nil then
-      M.server_supports_folding = client['server_capabilities']['foldingRangeProvider']
+  for _, client in pairs(clients) do
+    local client_id = client['id']
+    if M.done_clients[client] == nil then
+      local server_supports_folding = client['server_capabilities']['foldingRangeProvider'] or false
 
-      if M.server_supports_folding then
+
+      if server_supports_folding then
         client.config.callbacks['textDocument/foldingRange'] = M.fold_callback
         api.nvim_command('augroup LspFolding')
         api.nvim_command('autocmd!')
@@ -46,14 +48,19 @@ function M.setup_plugin()
       else
         api.nvim_command(string.format('echom "lsp-folding: %s does not provide folding requests"', client['name']))
       end
-      M.done_clients[id + 1] = client
+        M.done_clients[client_id] = server_supports_folding
     end
   end
 end
 
 
 function M.update_folds()
-  lsp.buf_request(0, 'textDocument/foldingRange', {textDocument = lsp.util.make_text_document_params()})
+  local clients = lsp.buf_get_clients(0)
+  for client_id, _ in pairs(clients) do
+    if M.done_clients[client_id] then
+      lsp.buf_request(0, 'textDocument/foldingRange', {textDocument = lsp.util.make_text_document_params()})
+    end
+  end
 end
 
 
@@ -67,10 +74,6 @@ end
 
 
 function M.fold_callback(_, _, result)
-  if not M.server_supports_folding then
-    return
-  end
-
   for _, fold in ipairs(result) do
     fold['startLine'] = M.adjust_foldstart(fold['startLine'])
     fold['endLine'] = M.adjust_foldend(fold['endLine'])
