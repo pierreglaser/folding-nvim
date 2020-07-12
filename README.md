@@ -3,7 +3,7 @@ LSP-Powered folding plugin for neovim.
 
 # Requirements
 
-Neovim nightly, as well as the language servers you want to use this plugin with.
+Neovim nightly, `nvim_lsp` as well as the language servers you want to use this plugin with.
 
 
 # Installation
