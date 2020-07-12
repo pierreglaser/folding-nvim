@@ -3,7 +3,7 @@ LSP-Powered folding plugin for neovim.
 
 # Requirements
 
-Neovim nightly.
+Neovim nightly, as well as the language servers you want to use this plugin with.
 
 
 # Installation
@@ -25,7 +25,20 @@ packadd folding-nvim
 
 # Configuration
 
-None, this plugin should work out of the box (once the installation steps are completed).
+Neovim needs to add the `folding.on_attach` callback to each language server you want to use this plugin with. For instance, for
+`palantir/python-language-server`, add those following lua lines to your `vimrc`:
+```lua
+lua << EOF
+function on_attach_callback(client, bufnr)
+  -- If you use completion-nvim/diagnostic-nvim, uncomment those two lines.
+  -- require('diagnostic').on_attach()
+  -- require('completion').on_attach()
+  require('folding').on_attach()
+end
+
+require'nvim_lsp'.pyls.setup{on_attach=on_attach_callback}
+EOF
+```
 
 
 # LICENCE
