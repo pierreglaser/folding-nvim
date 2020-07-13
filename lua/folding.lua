@@ -30,7 +30,7 @@ function M.setup_plugin()
 
   for _, client in pairs(clients) do
     local client_id = client['id']
-    if M.done_clients[client] == nil then
+    if M.done_clients[client_id] == nil then
       local server_supports_folding = client['server_capabilities']['foldingRangeProvider'] or false
 
 
@@ -48,7 +48,8 @@ function M.setup_plugin()
       else
         api.nvim_command(string.format('echom "lsp-folding: %s does not provide folding requests"', client['name']))
       end
-        M.done_clients[client_id] = server_supports_folding
+
+      M.done_clients[client_id] = server_supports_folding
     end
   end
 end
