@@ -35,6 +35,10 @@ function M.setup_plugin()
 
 
       if server_supports_folding then
+        -- for backwards compatibility
+        if client.config.callbacks then
+          client.config.callbacks['textDocument/foldingRange'] = M.fold_handler
+        end
         client.config.handlers['textDocument/foldingRange'] = M.fold_handler
         api.nvim_command('augroup LspFolding')
         api.nvim_command('autocmd!')
