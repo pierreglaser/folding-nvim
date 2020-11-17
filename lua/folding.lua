@@ -35,7 +35,13 @@ function M.setup_plugin()
 
 
       if server_supports_folding then
-        client.config.callbacks['textDocument/foldingRange'] = M.fold_callback
+        -- for backwards compatibility
+        if client.config.callbacks then
+          client.config.callbacks['textDocument/foldingRange'] = M.fold_handler
+        end
+        if client.config.handlers then
+          client.config.handlers['textDocument/foldingRange'] = M.fold_handler
+        end
         api.nvim_command('augroup LspFolding')
         api.nvim_command('autocmd!')
         api.nvim_command('autocmd BufWritePost <buffer> lua require"folding".update_folds()')
@@ -74,7 +80,7 @@ function M.debug_folds()
 end
 
 
-function M.fold_callback(_, _, result)
+function M.fold_handler(_, _, result)
   for _, fold in ipairs(result) do
     fold['startLine'] = M.adjust_foldstart(fold['startLine'])
     fold['endLine'] = M.adjust_foldend(fold['endLine'])
