@@ -39,7 +39,9 @@ function M.setup_plugin()
         if client.config.callbacks then
           client.config.callbacks['textDocument/foldingRange'] = M.fold_handler
         end
-        client.config.handlers['textDocument/foldingRange'] = M.fold_handler
+        if client.config.handlers then
+          client.config.handlers['textDocument/foldingRange'] = M.fold_handler
+        end
         api.nvim_command('augroup LspFolding')
         api.nvim_command('autocmd!')
         api.nvim_command('autocmd BufWritePost <buffer> lua require"folding".update_folds()')
