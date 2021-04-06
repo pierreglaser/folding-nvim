@@ -10,13 +10,14 @@ M.current_buf_folds = {}
 -- Not used at runtime (capability is resolved dynamically)
 M.servers_supporting_folding = {
   pyls = true,
+  pyright = false,
   sumneko_lua = true,
   texlab = true,
   clangd = false,
   julials = false,
 }
 
-M.done_clients = {}
+M.active_folding_clients = {}
 
 
 function M.on_attach()
@@ -26,46 +27,45 @@ end
 
 
 function M.setup_plugin()
+  api.nvim_command("augroup FoldingCommand")
+    api.nvim_command("autocmd! * <buffer>")
+    api.nvim_command("autocmd BufEnter <buffer> lua require'folding'.update_folds()")
+    api.nvim_command("autocmd BufWritePost <buffer> lua require'folding'.update_folds()")
+  api.nvim_command("augroup end")
+
   local clients = vim.lsp.buf_get_clients()
 
   for _, client in pairs(clients) do
     local client_id = client['id']
-    if M.done_clients[client_id] == nil then
+    if M.active_folding_clients[client_id] == nil then
       local server_supports_folding = client['server_capabilities']['foldingRangeProvider'] or false
-
-
-      if server_supports_folding then
-        -- for backwards compatibility
-        if client.config.callbacks then
-          client.config.callbacks['textDocument/foldingRange'] = M.fold_handler
-        end
-        if client.config.handlers then
-          client.config.handlers['textDocument/foldingRange'] = M.fold_handler
-        end
-        api.nvim_command('augroup LspFolding')
-        api.nvim_command('autocmd!')
-        api.nvim_command('autocmd BufWritePost <buffer> lua require"folding".update_folds()')
-        api.nvim_command('autocmd InsertLeave <buffer> lua require"folding".update_folds()')
-        api.nvim_command('augroup END')
-
-        local current_window = api.nvim_get_current_win()
-        api.nvim_win_set_option(current_window, 'foldmethod', 'expr')
-        api.nvim_win_set_option(current_window, 'foldexpr', 'folding_nvim#foldexpr()')
-      else
+      if not server_supports_folding then
         api.nvim_command(string.format('echom "lsp-folding: %s does not provide folding requests"', client['name']))
       end
 
-      M.done_clients[client_id] = server_supports_folding
+      M.active_folding_clients[client_id] = server_supports_folding
     end
   end
 end
 
 
+
 function M.update_folds()
-  local clients = lsp.buf_get_clients(0)
-  for client_id, _ in pairs(clients) do
-    if M.done_clients[client_id] then
-      lsp.buf_request(0, 'textDocument/foldingRange', {textDocument = lsp.util.make_text_document_params()})
+  local current_window = api.nvim_get_current_win()
+  local in_diff_mode = api.nvim_win_get_option(current_window, 'diff')
+  if in_diff_mode then
+    -- In diff mode, use diff folding.
+    api.nvim_win_set_option(current_window, 'foldmethod', 'diff')
+  else
+    local clients = lsp.buf_get_clients(0)
+    for client_id, client in pairs(clients) do
+      if M.active_folding_clients[client_id] then
+        -- XXX: better to pass callback in this method or add it directly in the config?
+        -- client.config.callbacks['textDocument/foldingRange'] = M.fold_handler
+        local current_bufnr = api.nvim_get_current_buf()
+        local params = { uri = vim.uri_from_bufnr(current_bufnr) }
+        client.request('textDocument/foldingRange', {textDocument = params}, M.fold_handler, current_bufnr)
+      end
     end
   end
 end
@@ -80,16 +80,23 @@ function M.debug_folds()
 end
 
 
-function M.fold_handler(_, _, result)
-  for _, fold in ipairs(result) do
-    fold['startLine'] = M.adjust_foldstart(fold['startLine'])
-    fold['endLine'] = M.adjust_foldend(fold['endLine'])
+function M.fold_handler(_, _, result, _, bufnr)
+  -- params: err, method, result, client_id, bufnr
+  -- XXX: handle err?
+  local current_bufnr = api.nvim_get_current_buf()
+  -- Discard the folding result if buffer focus has changed since the request was
+  -- done.
+  if current_bufnr == bufnr then
+    for _, fold in ipairs(result) do
+      fold['startLine'] = M.adjust_foldstart(fold['startLine'])
+      fold['endLine'] = M.adjust_foldend(fold['endLine'])
+    end
+    table.sort(result, function(a, b) return a['startLine']  < b['startLine'] end)
+    M.current_buf_folds = result
+    local current_window = api.nvim_get_current_win()
+    api.nvim_win_set_option(current_window, 'foldmethod', 'expr')
+    api.nvim_win_set_option(current_window, 'foldexpr', 'folding_nvim#foldexpr()')
   end
-
-  table.sort(result, function(a, b) return a['startLine']  < b['startLine'] end)
-  M.current_buf_folds = result
-  local current_window = api.nvim_get_current_win()
-  api.nvim_win_set_option(current_window, 'foldmethod', 'expr')
 end
 
 
