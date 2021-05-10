@@ -86,7 +86,7 @@ function M.fold_handler(_, _, result, _, bufnr)
   local current_bufnr = api.nvim_get_current_buf()
   -- Discard the folding result if buffer focus has changed since the request was
   -- done.
-  if current_bufnr == bufnr then
+  if current_bufnr == bufnr and result then
     for _, fold in ipairs(result) do
       fold['startLine'] = M.adjust_foldstart(fold['startLine'])
       fold['endLine'] = M.adjust_foldend(fold['endLine'])
