@@ -80,13 +80,14 @@ function M.debug_folds()
 end
 
 
-function M.fold_handler(_, _, result, _, bufnr)
-  -- params: err, method, result, client_id, bufnr
+function M.fold_handler(_, result, ctx, _)
+  -- params: err, result, ctx, config
   -- XXX: handle err?
+  local bufnr = ctx['bufnr']
   local current_bufnr = api.nvim_get_current_buf()
   -- Discard the folding result if buffer focus has changed since the request was
   -- done.
-  if current_bufnr == bufnr then
+  if current_bufnr == bufnr and result ~= nil then
     for _, fold in ipairs(result) do
       fold['startLine'] = M.adjust_foldstart(fold['startLine'])
       fold['endLine'] = M.adjust_foldend(fold['endLine'])
