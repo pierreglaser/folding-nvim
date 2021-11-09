@@ -80,13 +80,13 @@ function M.debug_folds()
 end
 
 
-function M.fold_handler(err, method, result, _, bufnr)
+function M.fold_handler(err, result, ctx, config)
   -- params: err, method, result, client_id, bufnr
   -- XXX: handle err?
   local current_bufnr = api.nvim_get_current_buf()
   -- Discard the folding result if buffer focus has changed since the request was
   -- done.
-  if current_bufnr == bufnr then
+  if current_bufnr == ctx["bufnr"] then
     if err == nil and result == nil then
       -- client wont return a valid result in early stages after initialization
       -- XXX: this is dirty
