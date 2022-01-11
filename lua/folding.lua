@@ -80,23 +80,36 @@ function M.debug_folds()
 end
 
 
-function M.fold_handler(_, _, result, _, bufnr)
-  -- params: err, method, result, client_id, bufnr
-  -- XXX: handle err?
-  local current_bufnr = api.nvim_get_current_buf()
+function M.fold_handler(err, result, ctx, _config)
   -- Discard the folding result if buffer focus has changed since the request was
-  -- done.
-  if current_bufnr == bufnr then
-    for _, fold in ipairs(result) do
-      fold['startLine'] = M.adjust_foldstart(fold['startLine'])
-      fold['endLine'] = M.adjust_foldend(fold['endLine'])
-    end
-    table.sort(result, function(a, b) return a['startLine']  < b['startLine'] end)
-    M.current_buf_folds = result
-    local current_window = api.nvim_get_current_win()
-    api.nvim_win_set_option(current_window, 'foldmethod', 'expr')
-    api.nvim_win_set_option(current_window, 'foldexpr', 'folding_nvim#foldexpr()')
+  local current_bufnr = api.nvim_get_current_buf()
+  if current_bufnr ~= ctx["bufnr"] then
+    return
   end
+
+  -- XXX: handle err?
+  if err ~= nil then
+    print(err)
+    return
+  end
+
+  if result == nil then
+    -- client wont return a valid result in early stages after initialization
+    -- XXX: this is dirty
+    vim.wait(100)
+    M.update_folds()
+    return
+  end
+
+  for _, fold in ipairs(result) do
+    fold['startLine'] = M.adjust_foldstart(fold['startLine'])
+    fold['endLine'] = M.adjust_foldend(fold['endLine'])
+  end
+  table.sort(result, function(a, b) return a['startLine']  < b['startLine'] end)
+  M.current_buf_folds = result
+  local current_window = api.nvim_get_current_win()
+  api.nvim_win_set_option(current_window, 'foldmethod', 'expr')
+  api.nvim_win_set_option(current_window, 'foldexpr', 'folding_nvim#foldexpr()')
 end
 
 
