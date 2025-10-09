@@ -19,53 +19,63 @@ M.servers_supporting_folding = {
 M.done_clients = {}
 
 
-function M.on_attach()
-  M.setup_plugin()
-  M.update_folds()
+function M.on_attach(event)
+  M.setup_plugin(event.buf, event.data.client_id)
+  M.update_folds(event.buf)
+end
+
+function M.setup()
+  local lsp_cmds = vim.api.nvim_create_augroup('lsp_cmds', {clear = true})
+  vim.api.nvim_create_autocmd('LspAttach', {
+    group = lsp_cmds,
+    desc = 'folding-nvim on_attach',
+    callback = M.on_attach
+  })
 end
 
 
-function M.setup_plugin()
-  local clients = vim.lsp.buf_get_clients()
+function M.setup_plugin(bufnr, client_id)
+  local client = vim.lsp.get_client_by_id(client_id)
 
-  for _, client in pairs(clients) do
-    local client_id = client['id']
-    if M.done_clients[client_id] == nil then
-      local server_supports_folding = client['server_capabilities']['foldingRangeProvider'] or false
+  if M.done_clients[client_id] == nil then
+    local server_supports_folding = client['server_capabilities']['foldingRangeProvider'] or false
 
-
-      if server_supports_folding then
+    if server_supports_folding then
+      if client.handlers ~= nil then
+        client.handlers['textDocument/foldingRange'] = M.fold_handler_new
+      elseif client.config.handlers ~= nil then
         -- for backwards compatibility
-        if client.config.callbacks then
-          client.config.callbacks['textDocument/foldingRange'] = M.fold_handler
-        end
-        if client.config.handlers then
-          client.config.handlers['textDocument/foldingRange'] = M.fold_handler
-        end
-        api.nvim_command('augroup LspFolding')
-        api.nvim_command('autocmd!')
-        api.nvim_command('autocmd BufWritePost <buffer> lua require"folding".update_folds()')
-        api.nvim_command('autocmd InsertLeave <buffer> lua require"folding".update_folds()')
-        api.nvim_command('augroup END')
-
-        local current_window = api.nvim_get_current_win()
-        api.nvim_win_set_option(current_window, 'foldmethod', 'expr')
-        api.nvim_win_set_option(current_window, 'foldexpr', 'folding_nvim#foldexpr()')
-      else
-        api.nvim_command(string.format('echom "lsp-folding: %s does not provide folding requests"', client['name']))
+        vim.lsp.handlers['textDocument/foldingRange'] = M.fold_handler
+      elseif client.config.callbacks ~= nil then
+        -- for backwards compatibility
+        client.config.callbacks['textDocument/foldingRange'] = M.fold_handler
       end
+      api.nvim_command('augroup LspFolding')
+      api.nvim_command('autocmd!')
+      api.nvim_command('autocmd BufWritePost <buffer> lua require"folding".update_folds()')
+      api.nvim_command('autocmd InsertLeave <buffer> lua require"folding".update_folds()')
+      api.nvim_command('augroup END')
 
-      M.done_clients[client_id] = server_supports_folding
+      local current_window = api.nvim_get_current_win()
+      api.nvim_win_set_option(current_window, 'foldmethod', 'expr')
+      api.nvim_win_set_option(current_window, 'foldexpr', 'folding_nvim#foldexpr()')
+    else
+      api.nvim_command(string.format('echom "lsp-folding: %s does not provide folding requests"', client['name']))
     end
+
+    M.done_clients[client_id] = server_supports_folding
   end
+  -- end
 end
 
 
-function M.update_folds()
-  local clients = lsp.buf_get_clients(0)
-  for client_id, _ in pairs(clients) do
-    if M.done_clients[client_id] then
-      lsp.buf_request(0, 'textDocument/foldingRange', {textDocument = lsp.util.make_text_document_params()})
+function M.update_folds(bufnr)
+  bufnr = bufnr or api.nvim_get_current_buf()
+  local clients = lsp.get_clients({bufnr = bufnr})
+  for client_id, client in pairs(clients) do
+    local server_supports_folding = client['server_capabilities']['foldingRangeProvider'] or false
+    if M.done_clients[client_id] and server_supports_folding then
+      lsp.buf_request(bufnr, 'textDocument/foldingRange', {textDocument = lsp.util.make_text_document_params()})
     end
   end
 end
@@ -79,8 +89,20 @@ function M.debug_folds()
   end
 end
 
+-- for backward compatibility
+function M.fold_handler(a, b, result)
+  for _, fold in ipairs(result) do
+    fold['startLine'] = M.adjust_foldstart(fold['startLine'])
+    fold['endLine'] = M.adjust_foldend(fold['endLine'])
+  end
 
-function M.fold_handler(_, _, result)
+  table.sort(result, function(a, b) return a['startLine']  < b['startLine'] end)
+  M.current_buf_folds = result
+  local current_window = api.nvim_get_current_win()
+  api.nvim_win_set_option(current_window, 'foldmethod', 'expr')
+end
+
+function M.fold_handler_new(err, result, ctx)
   for _, fold in ipairs(result) do
     fold['startLine'] = M.adjust_foldstart(fold['startLine'])
     fold['endLine'] = M.adjust_foldend(fold['endLine'])
